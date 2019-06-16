@@ -1,8 +1,8 @@
 const querystring = require('querystring');
 const handleBlogRouter = require('./src/router/blog')
 const handleUserRouter = require('./src/router/user')
+const { get, set } = require('./src/db/redis')
 
-const SESSION_DATA = {}
 
 const getCookieExpires  = () =>{
     const now = new Date()
@@ -59,22 +59,29 @@ const serverHandle = (req, res) => {
         req.cookie[key] = val
     })
 
-    //解析session
+    //Redis处理Session
     let needSetCookie = false
     let userId = req.cookie.userid
-    if(userId) {
-        if(!SESSION_DATA[userId]){
-            SESSION_DATA[userId] = {}
-        } 
-
-    } else {
+    if(!userId){
         needSetCookie = true
         userId = `${Date.now()}_${Math.random()}`
-        SESSION_DATA[userId] = {}
+        //初始化session
+        set(userId, {})
     }
-    req.session = SESSION_DATA[userId]
+    //获取session
+    req.sessionId = userId
+    get(userId).then(sessiontData =>{
+        if(sessiontData == null){
+            set(req.sessionId, {})
+            req.session = {}
+        } else {
+            req.session = sessiontData
+        }
+        console.log('request session', req.session)
 
-    getPostData(req).then(postData => {
+        return getPostData(req)
+    })
+    .then(postData => {
         req.body = postData
 
         //blog router
